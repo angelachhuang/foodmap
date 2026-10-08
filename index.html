@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>高雄必比登美食地圖</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  
+  <style>
+    :root {
+      --primary: #c2410c;
+      --primary-light: #fff7ed;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --border-color: #e5e7eb;
+      --sidebar-width: 400px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      color: var(--text-main);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #f9fafb;
+    }
+
+    /* 側邊欄樣式 */
+    #sidebar {
+      width: var(--sidebar-width);
+      height: 100%;
+      background: #ffffff;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .header {
+      padding: 20px;
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .header p {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    .filter-panel {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color);
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .search-input, .select-input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .search-input:focus, .select-input:focus {
+      border-color: var(--primary);
+    }
+
+    .list-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .food-card {
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .food-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .food-card.active {
+      border-color: var(--primary);
+      background-color: var(--primary-light);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #fed7aa;
+      color: #9a3412;
+      font-weight: 500;
+    }
+
+    .card-info {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .card-desc {
+      font-size: 0.82rem;
+      color: #4b5563;
+      margin-top: 8px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* 地圖主體 */
+    #map {
+      flex: 1;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Popup 彈跳視窗客製化 */
+    .popup-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .popup-tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      background: #f3f4f6;
+      border-radius: 4px;
+      color: #4b5563;
+      margin-bottom: 8px;
+    }
+
+    .popup-text {
+      font-size: 0.85rem;
+      color: #374141;
+      line-height: 1.45;
+      margin-bottom: 6px;
+    }
+
+    .popup-btn {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 4px 10px;
+      background-color: var(--primary);
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    /* 手機版響應式設計 */
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column-reverse;
+      }
+      #sidebar {
+        width: 100%;
+        height: 48vh;
+        border-right: none;
+        border-top: 1px solid var(--border-color);
+      }
+      #map {
+        height: 52vh;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 左側搜尋與店家資訊面板 -->
+  <aside id="sidebar">
+    <header class="header">
+      <h1>高雄必比登美食地圖</h1>
+      <p>Michelin Bib Gourmand Guide · Kaohsiung</p>
+    </header>
+
+    <section class="filter-panel">
+      <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜尋店名、美食類別或關鍵字..." />
+      <select id="districtSelect" class="select-input">
+        <option value="">所有行政區域 (全部)</option>
+      </select>
+    </section>
+
+    <div class="list-container" id="cardList"></div>
+  </aside>
+
+  <!-- 右側地圖容器 -->
+  <main id="map"></main>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // 依據 kaohsiung_bib_gourmand.csv 精確轉換後的資料集（無杜撰）
+    const restaurants = [
+      {
+        name: "白玉樓",
+        category: "臺灣菜",
+        district: "前鎮區",
+        address: "高雄市前鎮區中華五路789號（夢時代購物中心6樓）",
+        phone: "(07)841-8555",
+        comment: "傳承四代酒家菜經典風味，蒜苗五花肉與古早味八寶丸深受老饕喜愛，料理精緻下飯。",
+        lat: 22.5952,
+        lng: 120.3069
+      },
+      {
+        name: "小燉食室",
+        category: "臺灣菜",
+        district: "前鎮區",
+        address: "高雄市前鎮區廣西路226號",
+        phone: "0906-303-309",
+        comment: "以清爽慢燉湯品搭配特色小菜為主的日式文青風格食堂，湯頭鮮甜醇厚、暖胃無負擔。",
+        lat: 22.6155,
+        lng: 120.3170
+      },
+      {
+        name: "永筵小館",
+        category: "臺灣菜",
+        district: "前金區",
+        address: "高雄市前金區成功一路528號",
+        phone: "0966-205-757",
+        comment: "主打精緻家常台菜熱炒，用料實在且鍋氣十足，每道熱炒調味精準到位。",
+        lat: 22.6288,
+        lng: 120.2936
+      },
+      {
+        name: "牛老大涮牛肉（高雄總店）",
+        category: "臺灣菜 / 火鍋",
+        district: "前金區",
+        address: "高雄市前金區自強二路18號",
+        phone: "(07)281-9196",
+        comment: "每天直送溫體台灣牛肉，牛骨與蔬果熬製的高湯清甜爽口，肉質鮮嫩彈牙。",
+        lat: 22.6225,
+        lng: 120.2952
+      },
+      {
+        name: "昭明海產家庭料理",
+        category: "海鮮 / 臺灣菜",
+        district: "前金區",
+        address: "高雄市前金區自強一路53號",
+        phone: "(07)241-2550",
+        comment: "老字號海產店，每日精選新鮮漁獲，料理手法保留食材本味，蒜仔肉與煎魚是招牌必點。",
+        lat: 22.6315,
+        lng: 120.2957
+      },
+      {
+        name: "前金肉燥飯",
+        category: "小吃",
+        district: "前金區",
+        address: "高雄市前金區大同二路26號",
+        phone: "(07)272-7263",
+        comment: "飄香一甲子老店，手工切丁肉燥肥而不膩、膠質豐厚，搭配半熟鴨蛋包是絕配。",
+        lat: 22.6272,
+        lng: 120.2953
+      },
+      {
+        name: "米院子油飯",
+        category: "小吃",
+        district: "新興區",
+        address: "高雄市新興區南海街30號",
+        phone: "(07)222-6699",
+        comment: "文青庭院風店面，糯米粒粒分明Q彈帶勁，拌炒鴨肉與麻油香氣四溢，清爽不油膩。",
+        lat: 22.6258,
+        lng: 120.3095
+      },
+      {
+        name: "春蘭割包",
+        category: "小吃",
+        district: "新興區",
+        address: "高雄市新興區復興一路5號",
+        phone: "(07)201-7806",
+        comment: "外皮鬆軟有嚼勁，內餡滷肉肥瘦比例適中，鋪滿酸菜與微甜花生粉，份量紮實飽足。",
+        lat: 22.6252,
+        lng: 120.3088
+      },
+      {
+        name: "泰元",
+        category: "泰國菜",
+        district: "苓雅區",
+        address: "高雄市苓雅區苓雅二路53號",
+        phone: "(07)221-0662",
+        comment: "由泰籍廚師掌勺，口味地道濃郁，酸辣冬蔭功與泰式炒河粉香料層次豐富。",
+        lat: 22.6212,
+        lng: 120.3056
+      },
+      {
+        name: "菜粽李",
+        category: "小吃",
+        district: "苓雅區",
+        address: "高雄市苓雅區成功一路159號",
+        phone: "(07)331-3086",
+        comment: "只賣純素花生粽的傳奇老店，糯米軟糯綿密，花生大顆鬆軟，淋上甘醇油膏與花生粉風味絕佳。",
+        lat: 22.6159,
+        lng: 120.2968
+      },
+      {
+        name: "侯記鴨肉飯",
+        category: "小吃",
+        district: "三民區",
+        address: "高雄市三民區自強一路201號",
+        phone: "(07)282-7588",
+        comment: "煙燻鴨肉鹹香嫩口，米飯淋上特調鴨油醬汁香氣撲鼻，當歸鴨湯湯頭濃郁甘甜。",
+        lat: 22.6373,
+        lng: 120.2962
+      },
+      {
+        name: "良佳豬腳",
+        category: "小吃",
+        district: "三民區",
+        address: "高雄市三民區陽明路229號",
+        phone: "(07)392-5533",
+        comment: "滷汁融合中藥材香氣，豬腳外皮油亮軟Q且富含膠質，入口即化毫無腥味。",
+        lat: 22.6457,
+        lng: 120.3409
+      },
+      {
+        name: "貳哥食堂",
+        category: "臺灣菜",
+        district: "鼓山區",
+        address: "高雄市鼓山區青海路145號",
+        phone: "(07)554-1123",
+        comment: "提供各式經典台式家常料理，風味濃郁適口，化骨秋刀魚與芋香肉餅為必吃特色菜。",
+        lat: 22.6568,
+        lng: 120.2908
+      },
+      {
+        name: "賣塩順台菜",
+        category: "臺灣菜",
+        district: "鼓山區",
+        address: "高雄市鼓山區青海路173號",
+        phone: "(07)553-0668",
+        comment: "走復古懷舊風格的台菜館，菜色鑊氣十足，古早味烘蛋與三杯料理極具水準。",
+        lat: 22.6567,
+        lng: 120.2898
+      },
+      {
+        name: "正宗鴨肉飯",
+        category: "小吃",
+        district: "左營區",
+        address: "高雄市左營區裕誠路245號",
+        phone: "(07)556-6428",
+        comment: "手撕煙燻鴨肉多汁柔嫩，配上爽脆醃黃瓜與淋滿鴨油的白飯，排隊人潮絡繹不絕。",
+        lat: 22.6618,
+        lng: 120.3093
+      },
+      {
+        name: "弘記肉燥飯舖",
+        category: "小吃",
+        district: "左營區",
+        address: "高雄市左營區立文路96號",
+        phone: "(07)558-3777",
+        comment: "用餐環境現代舒適，肉燥肥而不膩帶有甘甜風味，推薦搭配炸半熟蛋與豬腳湯。",
+        lat: 22.6598,
+        lng: 120.3068
+      },
+      {
+        name: "楊寶寶蒸餃（朝明路）",
+        category: "麵食點心",
+        district: "楠梓區",
+        address: "高雄市楠梓區朝明路106號",
+        phone: "(07)351-3322",
+        comment: "楠梓超人氣名店，蒸餃皮薄餡多且湯汁飽滿爆漿，牛肉捲餅外皮香酥內餡豐富。",
+        lat: 22.7291,
+        lng: 120.3275
+      },
+      {
+        name: "北港蔡三代筒仔米糕",
+        category: "小吃",
+        district: "鹽埕區",
+        address: "高雄市鹽埕區河西路167號",
+        phone: "(07)551-7443",
+        comment: "鹽埕老字號排隊名店，筒仔米糕口感Q彈入味，搭配招牌蒸蛋湯更是經典在地吃法。",
+        lat: 22.6289,
+        lng: 120.2858
+      },
+      {
+        name: "橋仔頭黃家肉燥飯",
+        category: "小吃",
+        district: "橋頭區",
+        address: "高雄市橋頭區橋南路106號",
+        phone: "(07)612-3253",
+        comment: "榮獲高雄肉燥飯爭霸賽冠軍，老滷汁慢火燉煮出的手切肉燥膠質滿滿，入口甘香回甘。",
+        lat: 22.7562,
+        lng: 120.3115
+      },
+      {
+        name: "廖記米糕",
+        category: "小吃",
+        district: "橋頭區",
+        address: "高雄市橋頭區橋南路119號",
+        phone: "(07)612-8319",
+        comment: "陶罐蒸煮筒仔米糕口感鬆軟香Q，淋上自製香濃肉燥與肉鬆，古早味十足。",
+        lat: 22.7564,
+        lng: 120.3117
+      },
+      {
+        name: "湖東牛肉館",
+        category: "臺灣菜 / 火鍋",
+        district: "湖內區",
+        address: "高雄市湖內區中山路一段107號",
+        phone: "(07)693-0466",
+        comment: "極難預約的溫體牛霸主，每天現宰直送牛肉厚度扎實且肉質鮮嫩無比，高湯清甜甘醇。",
+        lat: 22.8943,
+        lng: 120.2312
+      },
+      {
+        name: "舊市羊肉（岡山）",
+        category: "臺灣菜 / 當歸羊肉",
+        district: "岡山區",
+        address: "高雄市岡山區河華路111號",
+        phone: "(07)625-8151",
+        comment: "飄香超過一甲子的岡山羊肉老字號，當歸溫補羊肉爐湯頭順口無羊羶味，炒羊肉鑊氣濃郁。",
+        lat: 22.8028,
+        lng: 120.2921
+      },
+      {
+        name: "阿香的廚房",
+        category: "原住民料理 / 臺灣菜",
+        district: "美濃區",
+        address: "高雄市美濃區中山路二段629號",
+        phone: "(07)681-7212",
+        comment: "融合原住民野菜與在地客家食材的創意風味菜，梅汁豆腐、烤山豬肉及山菜極具特色。",
+        lat: 22.8986,
+        lng: 120.5284
+      },
+      {
+        name: "秀明豬心冬粉",
+        category: "小吃",
+        district: "旗山區",
+        address: "高雄市旗山區永平街41號",
+        phone: "(07)662-4625",
+        comment: "旗山老街知名老店，豬心切片脆嫩多汁、湯頭溫潤清甜，月見肉燥飯也是一大亮點。",
+        lat: 22.8872,
+        lng: 120.4815
+      }
+    ];
+
+    // 初始化 Leaflet 地圖，以高雄市中心為視角
+    const map = L.map('map').setView([22.635, 120.31], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+    }).addTo(map);
+
+    const markerMap = new Map();
+    const markersGroup = L.featureGroup().addTo(map);
+
+    // 建立行政區下拉選單項目
+    const districtSelect = document.getElementById('districtSelect');
+    const districts = [...new Set(restaurants.map(r => r.district))];
+    districts.forEach(dist => {
+      const option = document.createElement('option');
+      option.value = dist;
+      option.textContent = dist;
+      districtSelect.appendChild(option);
+    });
+
+    // 建立店家標記與側邊卡片
+    const cardList = document.getElementById('cardList');
+
+    function createPopupContent(item) {
+      const googleMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name + ' ' + item.address)}`;
+      return `
+        <div>
+          <div class="popup-title">${item.name}</div>
+          <span class="popup-tag">${item.category}</span>
+          <div class="popup-text"><strong>📍 地址：</strong>${item.address}</div>
+          <div class="popup-text"><strong>📞 電話：</strong>${item.phone}</div>
+          <div class="popup-text"><strong>📝 評語：</strong>${item.comment}</div>
+          <a class="popup-btn" href="${googleMapUrl}" target="_blank" rel="noopener">🗺️ 開啟 Google 地圖導航</a>
+        </div>
+      `;
+    }
+
+    function initMapMarkers() {
+      restaurants.forEach(item => {
+        const marker = L.marker([item.lat, item.lng])
+          .bindPopup(createPopupContent(item));
+        
+        marker.on('click', () => {
+          highlightCard(item.name);
+        });
+
+        markersGroup.addLayer(marker);
+        markerMap.set(item.name, marker);
+      });
+    }
+
+    function renderCards(filteredData) {
+      cardList.innerHTML = '';
+      if (filteredData.length === 0) {
+        cardList.innerHTML = '<div style="text-align:center; padding: 20px; color:#9ca3af;">找不到符合的美食店家</div>';
+        return;
+      }
+
+      filteredData.forEach(item => {
+        const card = document.createElement('article');
+        card.className = 'food-card';
+        card.id = `card-${encodeURIComponent(item.name)}`;
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="card-title">${item.name}</span>
+            <span class="badge">${item.district}</span>
+          </div>
+          <div class="card-info">🏷️ ${item.category}</div>
+          <div class="card-info">📍 ${item.address}</div>
+          <div class="card-desc">💬 ${item.comment}</div>
+        `;
+
+        card.addEventListener('click', () => {
+          const marker = markerMap.get(item.name);
+          if (marker) {
+            map.flyTo([item.lat, item.lng], 15, { duration: 1 });
+            marker.openPopup();
+            highlightCard(item.name);
+          }
+        });
+
+        cardList.appendChild(card);
+      });
+    }
+
+    function highlightCard(name) {
+      document.querySelectorAll('.food-card').forEach(c => c.classList.remove('active'));
+      const activeCard = document.getElementById(`card-${encodeURIComponent(name)}`);
+      if (activeCard) {
+        activeCard.classList.add('active');
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // 搜尋與篩選邏輯
+    function filterData() {
+      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+      const selectedDistrict = districtSelect.value;
+
+      const filtered = restaurants.filter(item => {
+        const matchKeyword = !keyword || 
+          item.name.toLowerCase().includes(keyword) ||
+          item.category.toLowerCase().includes(keyword) ||
+          item.comment.toLowerCase().includes(keyword) ||
+          item.address.toLowerCase().includes(keyword);
+
+        const matchDistrict = !selectedDistrict || item.district === selectedDistrict;
+
+        return matchKeyword && matchDistrict;
+      });
+
+      renderCards(filtered);
+
+      // 動態更新地圖上的 Marker 顯示狀態
+      markersGroup.clearLayers();
+      filtered.forEach(item => {
+        const marker = markerMap.get(item.name);
+        if (marker) markersGroup.addLayer(marker);
+      });
+
+      // 自動縮放邊界容納所有篩選後的點
+      if (filtered.length > 0) {
+        map.fitBounds(markersGroup.getBounds(), { padding: [40, 40], maxZoom: 15 });
+      }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', filterData);
+    districtSelect.addEventListener('change', filterData);
+
+    // 啟動程序
+    initMapMarkers();
+    renderCards(restaurants);
+  </script>
+</body>
+</html>
